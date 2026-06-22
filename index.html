@@ -1,331 +1,267 @@
-import { useState } from "react";
-
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THC Prescribing Interval Calculator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #0f1117; }
+  body { color: #e2e8f0; font-family: monospace; }
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=number] { -moz-appearance: textfield; }
+  button { transition: all 0.15s; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
 const INHALED_MAX = 300;
 const ORAL_MAX = 40;
+const emptyFlower = () => ({ grams: "", thcPct: "", dispensings: "" });
+const emptyCart   = () => ({ mgPerCart: "", dispensings: "" });
 
 function Field({ label, hint, children }) {
   return (
-    <div style={{ marginBottom: 16 }}>
-      <label style={{ display: "block", fontSize: 11, color: "#94a3b8", letterSpacing: "0.06em", marginBottom: 6 }}>{label}</label>
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display:"block", fontSize:11, color:"#94a3b8", letterSpacing:"0.06em", marginBottom:6 }}>{label}</label>
       {children}
-      {hint && <div style={{ fontSize: 10, color: "#475569", marginTop: 4, lineHeight: 1.5 }}>{hint}</div>}
+      {hint && <div style={{ fontSize:10, color:"#475569", marginTop:4, lineHeight:1.5 }}>{hint}</div>}
     </div>
   );
 }
 
-function NumInput({ value, onChange, placeholder, step = "any", min = "0" }) {
+function NumInput({ value, onChange, placeholder, step, min }) {
   return (
-    <input
-      type="number"
-      value={value}
+    <input type="number" value={value} placeholder={placeholder} step={step || "any"} min={min || "0"}
       onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      step={step}
-      min={min}
-      style={{
-        width: "100%", background: "#0f1117", border: "1px solid #2a3045",
-        borderRadius: 7, color: "#e2e8f0", fontFamily: "monospace",
-        fontSize: 13, padding: "10px 14px", outline: "none", boxSizing: "border-box"
-      }}
-    />
+      style={{ width:"100%", background:"#0f1117", border:"1px solid #2a3045", borderRadius:7, color:"#e2e8f0", fontFamily:"monospace", fontSize:13, padding:"10px 14px", outline:"none", boxSizing:"border-box", colorScheme:"dark" }} />
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div style={{ fontSize:10, letterSpacing:"0.15em", textTransform:"uppercase", color:"#64748b", marginBottom:16, display:"flex", alignItems:"center", gap:10 }}>
+      {children}
+      <div style={{ flex:1, height:1, background:"#2a3045" }} />
+    </div>
+  );
+}
+
+function AddButton({ onClick, active, addLabel, removeLabel }) {
+  return (
+    <button onClick={onClick} style={{ width:"100%", padding:"9px 14px", marginTop:4, border:`1px dashed ${active ? "#f87171" : "#334155"}`, borderRadius:8, background:"transparent", color: active ? "#f87171" : "#64748b", fontFamily:"monospace", fontSize:11, cursor:"pointer", letterSpacing:"0.06em" }}>
+      {active ? removeLabel : addLabel}
+    </button>
   );
 }
 
 function MetricBox({ label, value, color }) {
   return (
-    <div style={{
-      background: "#1e2330", border: "1px solid #2a3045", borderRadius: 8,
-      padding: "14px 12px", flex: 1, minWidth: 0
-    }}>
-      <div style={{ fontSize: 20, fontWeight: 600, color: color || "#e2e8f0", marginBottom: 4, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 9, color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", lineHeight: 1.4 }}>{label}</div>
+    <div style={{ background:"#1e2330", border:"1px solid #2a3045", borderRadius:8, padding:"14px 12px", flex:1, minWidth:0 }}>
+      <div style={{ fontSize:20, fontWeight:600, color:color||"#e2e8f0", marginBottom:4, lineHeight:1 }}>{value}</div>
+      <div style={{ fontSize:9, color:"#64748b", letterSpacing:"0.1em", textTransform:"uppercase", lineHeight:1.4 }}>{label}</div>
     </div>
   );
 }
 
-function StepRow({ k, v }) {
+function StepRow({ k, v, highlight, sectionHeader }) {
+  if (sectionHeader) return <div style={{ fontSize:10, color:"#4ade80", letterSpacing:"0.1em", textTransform:"uppercase", padding:"8px 0 4px", borderBottom:"1px solid #1e2330" }}>{k}</div>;
   return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "baseline",
-      gap: 8, borderBottom: "1px solid #1e2330", padding: "5px 0", fontSize: 11
-    }}>
-      <span style={{ color: "#64748b" }}>{k}</span>
-      <span style={{ color: "#e2e8f0", fontWeight: 500, textAlign: "right" }}>{v}</span>
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:8, borderBottom:"1px solid #1e2330", padding:"5px 0", fontSize:11 }}>
+      <span style={{ color:"#64748b" }}>{k}</span>
+      <span style={{ color: highlight ? "#4ade80" : "#e2e8f0", fontWeight: highlight ? 600 : 500, textAlign:"right" }}>{v}</span>
     </div>
   );
 }
 
-export default function App() {
+function FlowerCard({ index, data, onChange, accentColor }) {
+  return (
+    <div style={{ background:"#0f1117", border:`1px solid ${accentColor}33`, borderRadius:10, padding:16, marginBottom:10 }}>
+      <div style={{ fontSize:10, letterSpacing:"0.12em", textTransform:"uppercase", color:accentColor, marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ width:6, height:6, borderRadius:"50%", background:accentColor }} />
+        Flower Product {index + 1}
+      </div>
+      <Field label="Quantity per dispensing (grams)"><NumInput value={data.grams} onChange={v => onChange("grams", v)} placeholder="e.g. 14" step="0.1" /></Field>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Field label="THC concentration (%)"><NumInput value={data.thcPct} onChange={v => onChange("thcPct", v)} placeholder="e.g. 27" step="0.1" /></Field>
+        <Field label="Total dispensings" hint="Original + repeats"><NumInput value={data.dispensings} onChange={v => onChange("dispensings", v)} placeholder="e.g. 2" step="1" min="1" /></Field>
+      </div>
+    </div>
+  );
+}
+
+function CartCard({ data, onChange }) {
+  return (
+    <div style={{ background:"#0f1117", border:"1px solid #a78bfa33", borderRadius:10, padding:16, marginBottom:10 }}>
+      <div style={{ fontSize:10, letterSpacing:"0.12em", textTransform:"uppercase", color:"#a78bfa", marginBottom:14, display:"flex", alignItems:"center", gap:8 }}>
+        <div style={{ width:6, height:6, borderRadius:"50%", background:"#a78bfa" }} />THC Cart
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <Field label="Total THC per cart (mg)" hint="e.g. 800 mg per cartridge"><NumInput value={data.mgPerCart} onChange={v => onChange("mgPerCart", v)} placeholder="e.g. 800" step="1" /></Field>
+        <Field label="Total dispensings" hint="Original + repeats"><NumInput value={data.dispensings} onChange={v => onChange("dispensings", v)} placeholder="e.g. 2" step="1" min="1" /></Field>
+      </div>
+    </div>
+  );
+}
+
+function App() {
   const [route, setRoute] = useState("inhaled");
-
-  // Inhaled fields
-  const [grams, setGrams] = useState("");
-  const [thcPct, setThcPct] = useState("");
-  const [dispensings, setDispensings] = useState("");
-
-  // Oral fields
+  const [flower1, setFlower1] = useState(emptyFlower());
+  const [showFlower2, setShowFlower2] = useState(false);
+  const [flower2, setFlower2] = useState(emptyFlower());
+  const [showCart, setShowCart] = useState(false);
+  const [cart, setCart] = useState(emptyCart());
   const [mgPerUnit, setMgPerUnit] = useState("");
   const [unitsPerContainer, setUnitsPerContainer] = useState("");
   const [containers, setContainers] = useState("");
-
-  // Date
   const [startDate, setStartDate] = useState("");
-
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
 
-  function fmt(n, d = 0) {
-    return Number(n).toLocaleString("en-AU", { maximumFractionDigits: d });
-  }
+  const upFlower = (idx, field, val) => { if (idx === 0) setFlower1(p => ({ ...p, [field]: val })); else setFlower2(p => ({ ...p, [field]: val })); setResult(null); };
+  const upCart = (field, val) => { setCart(p => ({ ...p, [field]: val })); setResult(null); };
+  const fmt = (n, d) => Number(n).toLocaleString("en-AU", { maximumFractionDigits: d || 0 });
+  const calcFlower = f => { const g = parseFloat(f.grams), p = parseFloat(f.thcPct), d = parseInt(f.dispensings); if (isNaN(g)||isNaN(p)||isNaN(d)||g<=0||p<=0||d<=0) return null; const mgPerGram = p*10, totalGrams = g*d; return { g, p, d, mgPerGram, totalGrams, thc: totalGrams*mgPerGram }; };
+  const calcCart = c => { const mg = parseFloat(c.mgPerCart), d = parseInt(c.dispensings); if (isNaN(mg)||isNaN(d)||mg<=0||d<=0) return null; return { mg, d, thc: mg*d }; };
+  const clearAll = () => { setFlower1(emptyFlower()); setFlower2(emptyFlower()); setShowFlower2(false); setCart(emptyCart()); setShowCart(false); setMgPerUnit(""); setUnitsPerContainer(""); setContainers(""); setStartDate(""); setResult(null); setError(""); };
+  const switchRoute = r => { setRoute(r); setResult(null); setError(""); };
 
-  function calculate() {
+  const calculate = () => {
     setError("");
     let totalTHC, maxDaily, steps, routeLabel;
-
     if (route === "inhaled") {
-      const g = parseFloat(grams), p = parseFloat(thcPct), d = parseInt(dispensings);
-      if (isNaN(g) || isNaN(p) || isNaN(d) || g <= 0 || p <= 0 || d <= 0) {
-        setError("Please fill in all inhaled fields with valid values.");
-        return;
-      }
-      const mgPerGram = p * 10;
-      const totalGrams = g * d;
-      totalTHC = totalGrams * mgPerGram;
+      const f1 = calcFlower(flower1); if (!f1) { setError("Please fill in all fields for Flower Product 1."); return; }
+      const f2 = showFlower2 ? calcFlower(flower2) : null; if (showFlower2 && !f2) { setError("Please fill in all fields for Flower Product 2, or remove it."); return; }
+      const c = showCart ? calcCart(cart) : null; if (showCart && !c) { setError("Please fill in all THC Cart fields, or remove it."); return; }
       maxDaily = INHALED_MAX;
-      routeLabel = "Inhaled";
-      steps = [
-        ["Quantity per dispensing", `${fmt(g, 1)} g`],
-        ["THC concentration", `${p}% = ${fmt(mgPerGram)} mg/g`],
-        ["Total dispensings supplied", `${d}`],
-        ["Total quantity supplied", `${fmt(g, 1)} g × ${d} = ${fmt(totalGrams, 1)} g`],
-        ["Total THC supplied", `${fmt(totalGrams, 1)} g × ${fmt(mgPerGram)} mg/g = ${fmt(totalTHC)} mg`],
-        ["Max daily inhaled dose", `${maxDaily} mg/day`],
-      ];
+      const active = [f1, f2, c].filter(Boolean);
+      if (active.length === 1) {
+        totalTHC = f1.thc; routeLabel = "Inhaled";
+        steps = [{ k:"Quantity per dispensing", v:`${fmt(f1.g,1)} g` },{ k:"THC concentration", v:`${f1.p}% = ${fmt(f1.mgPerGram)} mg/g` },{ k:"Total dispensings supplied", v:`${f1.d}` },{ k:"Total quantity supplied", v:`${fmt(f1.g,1)} g × ${f1.d} = ${fmt(f1.totalGrams,1)} g` },{ k:"Total THC supplied", v:`${fmt(f1.totalGrams,1)} g × ${fmt(f1.mgPerGram)} mg/g = ${fmt(f1.thc)} mg` },{ k:"Max daily inhaled dose", v:`${maxDaily} mg/day` }];
+      } else {
+        steps = []; const parts = [];
+        steps.push({ k:"Flower Product 1", v:"", section:true },{ k:"Quantity per dispensing", v:`${fmt(f1.g,1)} g` },{ k:"THC concentration", v:`${f1.p}% = ${fmt(f1.mgPerGram)} mg/g` },{ k:"Total dispensings", v:`${f1.d}` },{ k:"Total THC (Flower 1)", v:`${fmt(f1.totalGrams,1)} g × ${fmt(f1.mgPerGram)} mg/g = ${fmt(f1.thc)} mg` });
+        parts.push({ label:"Flower 1", thc:f1.thc });
+        if (f2) { steps.push({ k:"Flower Product 2", v:"", section:true },{ k:"Quantity per dispensing", v:`${fmt(f2.g,1)} g` },{ k:"THC concentration", v:`${f2.p}% = ${fmt(f2.mgPerGram)} mg/g` },{ k:"Total dispensings", v:`${f2.d}` },{ k:"Total THC (Flower 2)", v:`${fmt(f2.totalGrams,1)} g × ${fmt(f2.mgPerGram)} mg/g = ${fmt(f2.thc)} mg` }); parts.push({ label:"Flower 2", thc:f2.thc }); }
+        if (c) { steps.push({ k:"THC Cart", v:"", section:true },{ k:"THC per cartridge", v:`${fmt(c.mg)} mg` },{ k:"Total dispensings", v:`${c.d}` },{ k:"Total THC (Cart)", v:`${fmt(c.mg)} mg × ${c.d} = ${fmt(c.thc)} mg` }); parts.push({ label:"Cart", thc:c.thc }); }
+        totalTHC = parts.reduce((s,p) => s+p.thc, 0);
+        steps.push({ k:"Combined Total", v:"", section:true },{ k:"Combined total THC", v:`${parts.map(p=>fmt(p.thc)).join(" + ")} = ${fmt(totalTHC)} mg`, highlight:true },{ k:"Max daily inhaled dose", v:`${maxDaily} mg/day` });
+        routeLabel = "Inhaled";
+      }
     } else {
       const mg = parseFloat(mgPerUnit), upc = parseInt(unitsPerContainer), c = parseInt(containers);
-      if (isNaN(mg) || isNaN(upc) || isNaN(c) || mg <= 0 || upc <= 0 || c <= 0) {
-        setError("Please fill in all oral fields with valid values.");
-        return;
-      }
-      const totalUnits = upc * c;
-      totalTHC = totalUnits * mg;
-      maxDaily = ORAL_MAX;
-      routeLabel = "Oral";
-      steps = [
-        ["THC per unit", `${fmt(mg)} mg`],
-        ["Units per container", `${fmt(upc)}`],
-        ["Total containers supplied", `${c}`],
-        ["Total units supplied", `${fmt(upc)} × ${c} = ${fmt(totalUnits)}`],
-        ["Total THC supplied", `${fmt(totalUnits)} × ${fmt(mg)} mg = ${fmt(totalTHC)} mg`],
-        ["Max daily oral dose", `${maxDaily} mg/day`],
-      ];
+      if (isNaN(mg)||isNaN(upc)||isNaN(c)||mg<=0||upc<=0||c<=0) { setError("Please fill in all oral fields with valid values."); return; }
+      const totalUnits = upc*c; totalTHC = totalUnits*mg; maxDaily = ORAL_MAX; routeLabel = "Oral";
+      steps = [{ k:"THC per unit", v:`${fmt(mg)} mg` },{ k:"Units per container", v:`${fmt(upc)}` },{ k:"Total containers supplied", v:`${c}` },{ k:"Total units supplied", v:`${fmt(upc)} × ${c} = ${fmt(totalUnits)}` },{ k:"Total THC supplied", v:`${fmt(totalUnits)} × ${fmt(mg)} mg = ${fmt(totalTHC)} mg` },{ k:"Max daily oral dose", v:`${maxDaily} mg/day` }];
     }
-
-    const rawDays = totalTHC / maxDaily;
-    const minDays = Math.ceil(rawDays);
-    steps.push(["Minimum days (raw)", `${fmt(totalTHC)} ÷ ${maxDaily} = ${rawDays.toFixed(2)} days`]);
-    steps.push(["Minimum days (rounded up)", `${minDays} days`]);
-
-    let daysElapsed = null;
-    let eligibleDateStr = "";
+    const rawDays = totalTHC/maxDaily, minDays = Math.ceil(rawDays);
+    steps.push({ k:"Minimum days (raw)", v:`${fmt(totalTHC)} ÷ ${maxDaily} = ${rawDays.toFixed(2)} days` },{ k:"Minimum days (rounded up)", v:`${minDays} days`, highlight:true });
+    let daysElapsed = null, eligibleDateStr = "";
     if (startDate) {
-      const start = new Date(startDate); start.setHours(0, 0, 0, 0);
-      const today = new Date(); today.setHours(0, 0, 0, 0);
-      daysElapsed = Math.floor((today - start) / 86400000);
-      const eligible = new Date(start);
-      eligible.setDate(eligible.getDate() + minDays);
-      eligibleDateStr = eligible.toLocaleDateString("en-AU", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-      steps.push(["Days elapsed since supply", `${daysElapsed} days`]);
-      steps.push(["Earliest eligible date", eligibleDateStr]);
+      const start = new Date(startDate); start.setHours(0,0,0,0);
+      const today = new Date(); today.setHours(0,0,0,0);
+      daysElapsed = Math.floor((today-start)/86400000);
+      const eligible = new Date(start); eligible.setDate(eligible.getDate()+minDays);
+      eligibleDateStr = eligible.toLocaleDateString("en-AU",{ weekday:"long", day:"numeric", month:"long", year:"numeric" });
+      steps.push({ k:"Days elapsed since supply", v:`${daysElapsed} days` },{ k:"Earliest eligible date", v:eligibleDateStr });
     }
+    let status = "nodate"; if (daysElapsed !== null) status = daysElapsed >= minDays ? "ok" : "block";
+    setResult({ totalTHC, minDays, daysElapsed, eligibleDateStr, steps, routeLabel, status });
+  };
 
-    let status = "nodate";
-    if (daysElapsed !== null) status = daysElapsed >= minDays ? "ok" : "block";
-
-    setResult({ totalTHC, minDays, daysElapsed, eligibleDateStr, steps, routeLabel, status, rawDays });
-  }
-
-  const colors = { ok: "#4ade80", warn: "#f59e0b", block: "#f87171", nodate: "#f59e0b" };
+  const colors = { ok:"#4ade80", block:"#f87171", nodate:"#f59e0b" };
   const statusColor = result ? colors[result.status] : "#4ade80";
-
-  const cardStyle = {
-    background: "#181c27", border: `1px solid ${result ? (result.status === "ok" ? "#2a4535" : result.status === "block" ? "#4a2020" : "#2a3045") : "#2a3045"}`,
-    borderRadius: 12, padding: 24, marginBottom: 14
-  };
-
-  const inputStyle = {
-    width: "100%", background: "#0f1117", border: "1px solid #2a3045",
-    borderRadius: 7, color: "#e2e8f0", fontFamily: "monospace",
-    fontSize: 13, padding: "10px 14px", outline: "none", boxSizing: "border-box"
-  };
+  const card = border => ({ background:"#181c27", border:`1px solid ${border||"#2a3045"}`, borderRadius:12, padding:24, marginBottom:14, width:"100%", maxWidth:640, boxSizing:"border-box" });
+  const dateStyle = { width:"100%", background:"#0f1117", border:"1px solid #2a3045", borderRadius:7, color:"#e2e8f0", fontFamily:"monospace", fontSize:13, padding:"10px 14px", outline:"none", boxSizing:"border-box", colorScheme:"dark", cursor:"pointer" };
+  const clinicalItems = ["Determine whether the patient has exceeded the prescribed dose","Assess for misuse, loss, diversion, or unsafe use","Review whether the treatment plan remains appropriate","Consider adjusting dispensing intervals","Consider reducing, pausing, or ceasing treatment"];
 
   return (
-    <div style={{ background: "#0f1117", minHeight: "100vh", fontFamily: "monospace", color: "#e2e8f0", padding: "32px 16px 60px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-
-      {/* Header */}
-      <div style={{ width: "100%", maxWidth: 640, marginBottom: 32, borderBottom: "1px solid #2a3045", paddingBottom: 20 }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.2em", textTransform: "uppercase", color: "#4ade80", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ display: "inline-block", width: 20, height: 1, background: "#4ade80" }} />
-          Schedule 8 Clinical Tool
-        </div>
-        <div style={{ fontSize: 26, fontWeight: 300, color: "#f1f5f9", marginBottom: 6, lineHeight: 1.2 }}>
-          THC Prescribing <span style={{ color: "#4ade80", fontStyle: "italic" }}>Interval Calculator</span>
-        </div>
-        <div style={{ fontSize: 11, color: "#64748b", lineHeight: 1.6 }}>
-          Calculates the minimum days before a further medicinal cannabis prescription may be issued.
-        </div>
+    <div style={{ background:"#0f1117", minHeight:"100vh", fontFamily:"monospace", color:"#e2e8f0", padding:"32px 16px 60px", display:"flex", flexDirection:"column", alignItems:"center" }}>
+      <div style={{ width:"100%", maxWidth:640, marginBottom:32, borderBottom:"1px solid #2a3045", paddingBottom:20 }}>
+        <div style={{ fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", color:"#4ade80", marginBottom:10, display:"flex", alignItems:"center", gap:8 }}><span style={{ display:"inline-block", width:20, height:1, background:"#4ade80" }} />Schedule 8 Clinical Tool</div>
+        <div style={{ fontSize:26, fontWeight:300, color:"#f1f5f9", marginBottom:6, lineHeight:1.2 }}>THC Prescribing <span style={{ color:"#4ade80", fontStyle:"italic" }}>Interval Calculator</span></div>
+        <div style={{ fontSize:11, color:"#64748b", lineHeight:1.6 }}>Calculates the minimum days before a further medicinal cannabis prescription may be issued.</div>
       </div>
-
-      {/* Route Toggle */}
-      <div style={{ width: "100%", maxWidth: 640, ...cardStyle, border: "1px solid #2a3045" }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 16 }}>Route of Administration</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-          {["inhaled", "oral"].map(r => (
-            <button key={r} onClick={() => { setRoute(r); setResult(null); setError(""); }}
-              style={{
-                padding: "10px", border: `1px solid ${route === r ? "#4ade80" : "#2a3045"}`,
-                borderRadius: 8, background: route === r ? "rgba(74,222,128,0.1)" : "#0f1117",
-                color: route === r ? "#4ade80" : "#64748b", fontFamily: "monospace",
-                fontSize: 12, cursor: "pointer", letterSpacing: "0.04em", transition: "all 0.15s"
-              }}>
-              {r === "inhaled" ? "Inhaled (Flower)" : "Oral"}
-            </button>
-          ))}
+      <div style={card()}>
+        <SectionTitle>Route of Administration</SectionTitle>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
+          {[{id:"inhaled",label:"Inhaled"},{id:"oral",label:"Oral"}].map(r => (<button key={r.id} onClick={() => switchRoute(r.id)} style={{ padding:"10px", border:`1px solid ${route===r.id ? "#4ade80" : "#2a3045"}`, borderRadius:8, background: route===r.id ? "rgba(74,222,128,0.1)" : "#0f1117", color: route===r.id ? "#4ade80" : "#64748b", fontFamily:"monospace", fontSize:12, cursor:"pointer", letterSpacing:"0.04em" }}>{r.label}</button>))}
         </div>
-        <div style={{ fontSize: 10, color: "#64748b" }}>
-          Max daily {route} THC dose: <strong style={{ color: "#e2e8f0" }}>{route === "inhaled" ? "300" : "40"} mg/day</strong>
-        </div>
+        <div style={{ fontSize:10, color:"#64748b" }}>Max daily {route==="oral" ? "oral" : "inhaled"} THC dose: <strong style={{ color:"#e2e8f0" }}>{route==="oral" ? "40" : "300"} mg/day</strong>{route==="inhaled" && <span style={{ color:"#475569" }}> — flower and cart totals are combined</span>}</div>
       </div>
-
-      {/* Inhaled Fields */}
       {route === "inhaled" && (
-        <div style={{ width: "100%", maxWidth: 640, ...cardStyle, border: "1px solid #2a3045" }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 18 }}>Previous Prescription — Inhaled</div>
-          <Field label="Quantity per dispensing (grams)">
-            <NumInput value={grams} onChange={setGrams} placeholder="e.g. 14" step="0.1" />
-          </Field>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <Field label="THC concentration (%)">
-              <NumInput value={thcPct} onChange={setThcPct} placeholder="e.g. 27" step="0.1" />
-            </Field>
-            <Field label="Total dispensings supplied" hint="Original supply + all repeats dispensed">
-              <NumInput value={dispensings} onChange={setDispensings} placeholder="e.g. 2" step="1" min="1" />
-            </Field>
-          </div>
+        <div style={card()}>
+          <SectionTitle>Previous Prescription — Inhaled</SectionTitle>
+          <FlowerCard index={0} data={flower1} onChange={(f,v) => upFlower(0,f,v)} accentColor="#4ade80" />
+          {showFlower2 && <FlowerCard index={1} data={flower2} onChange={(f,v) => upFlower(1,f,v)} accentColor="#60a5fa" />}
+          <AddButton active={showFlower2} onClick={() => { setShowFlower2(p => !p); setFlower2(emptyFlower()); setResult(null); }} addLabel="+ Add second flower product" removeLabel="− Remove second flower product" />
+          <div style={{ height:1, background:"#2a3045", margin:"16px 0" }} />
+          {showCart && <CartCard data={cart} onChange={upCart} />}
+          <AddButton active={showCart} onClick={() => { setShowCart(p => !p); setCart(emptyCart()); setResult(null); }} addLabel="+ Add THC cart" removeLabel="− Remove THC cart" />
+          {(showFlower2 || showCart) && <div style={{ fontSize:10, color:"#475569", marginTop:10, lineHeight:1.6, padding:"8px 12px", background:"#0f1117", borderRadius:6, border:"1px solid #1e2330" }}>All active inhalational products will be combined to calculate the total THC supplied and minimum prescribing interval.</div>}
         </div>
       )}
-
-      {/* Oral Fields */}
       {route === "oral" && (
-        <div style={{ width: "100%", maxWidth: 640, ...cardStyle, border: "1px solid #2a3045" }}>
-          <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 18 }}>Previous Prescription — Oral</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <Field label="THC per unit (mg)" hint="per gummy / capsule / drop">
-              <NumInput value={mgPerUnit} onChange={setMgPerUnit} placeholder="e.g. 30" step="1" />
-            </Field>
-            <Field label="Units per container">
-              <NumInput value={unitsPerContainer} onChange={setUnitsPerContainer} placeholder="e.g. 60" step="1" min="1" />
-            </Field>
+        <div style={card()}>
+          <SectionTitle>Previous Prescription — Oral</SectionTitle>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+            <Field label="THC per unit (mg)" hint="per gummy / capsule / drop"><NumInput value={mgPerUnit} onChange={v => { setMgPerUnit(v); setResult(null); }} placeholder="e.g. 30" step="1" /></Field>
+            <Field label="Units per container"><NumInput value={unitsPerContainer} onChange={v => { setUnitsPerContainer(v); setResult(null); }} placeholder="e.g. 60" step="1" min="1" /></Field>
           </div>
-          <Field label="Total containers supplied" hint="Original supply + all repeats dispensed">
-            <NumInput value={containers} onChange={setContainers} placeholder="e.g. 2" step="1" min="1" />
-          </Field>
+          <Field label="Total containers supplied" hint="Original supply + all repeats dispensed"><NumInput value={containers} onChange={v => { setContainers(v); setResult(null); }} placeholder="e.g. 2" step="1" min="1" /></Field>
         </div>
       )}
-
-      {/* Date */}
-      <div style={{ width: "100%", maxWidth: 640, ...cardStyle, border: "1px solid #2a3045" }}>
-        <div style={{ fontSize: 10, letterSpacing: "0.15em", textTransform: "uppercase", color: "#64748b", marginBottom: 16 }}>Supply Period Start Date</div>
+      <div style={card()}>
+        <SectionTitle>Supply Period Start Date</SectionTitle>
         <Field label="Date previous prescription supply period commenced" hint="The date the first dispensing was supplied to the patient.">
-          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
-            style={{ ...inputStyle, colorScheme: "dark", cursor: "pointer" }} />
+          <input type="date" value={startDate} onChange={e => { setStartDate(e.target.value); setResult(null); }} style={dateStyle} />
         </Field>
       </div>
-
-      {/* Error */}
-      {error && (
-        <div style={{ width: "100%", maxWidth: 640, background: "rgba(248,113,113,0.1)", border: "1px solid #f87171", borderRadius: 8, padding: "12px 16px", marginBottom: 14, fontSize: 12, color: "#fca5a5" }}>
-          {error}
-        </div>
-      )}
-
-      {/* Button */}
-      <button onClick={calculate} style={{
-        width: "100%", maxWidth: 640, padding: 14, background: "#4ade80", color: "#0a150a",
-        border: "none", borderRadius: 9, fontFamily: "monospace", fontSize: 13,
-        fontWeight: 600, letterSpacing: "0.06em", cursor: "pointer", marginBottom: 16,
-        transition: "opacity 0.15s"
-      }}>
-        Calculate Prescribing Interval
-      </button>
-
-      {/* Result */}
+      {error && <div style={{ width:"100%", maxWidth:640, background:"rgba(248,113,113,0.1)", border:"1px solid #f87171", borderRadius:8, padding:"12px 16px", marginBottom:14, fontSize:12, color:"#fca5a5", boxSizing:"border-box" }}>{error}</div>}
+      <div style={{ width:"100%", maxWidth:640, display:"flex", gap:10, marginBottom:16, boxSizing:"border-box" }}>
+        <button onClick={calculate} style={{ flex:1, padding:14, background:"#4ade80", color:"#0a150a", border:"none", borderRadius:9, fontFamily:"monospace", fontSize:13, fontWeight:600, letterSpacing:"0.06em", cursor:"pointer" }}>Calculate Prescribing Interval</button>
+        <button onClick={clearAll} onMouseEnter={e => { e.currentTarget.style.background="rgba(248,113,113,0.08)"; e.currentTarget.style.borderColor="#f87171"; e.currentTarget.style.color="#f87171"; }} onMouseLeave={e => { e.currentTarget.style.background="#1e2330"; e.currentTarget.style.borderColor="#2a3045"; e.currentTarget.style.color="#94a3b8"; }} style={{ flexShrink:0, padding:"14px 20px", background:"#1e2330", color:"#94a3b8", border:"1px solid #2a3045", borderRadius:9, fontFamily:"monospace", fontSize:12, letterSpacing:"0.04em", cursor:"pointer", whiteSpace:"nowrap" }}>Clear All</button>
+      </div>
       {result && (
-        <div style={{ width: "100%", maxWidth: 640, background: "#181c27", border: `1px solid ${statusColor}`, borderRadius: 12, padding: 24, marginBottom: 14 }}>
-
-          {/* Status */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", background: statusColor, boxShadow: `0 0 8px ${statusColor}`, flexShrink: 0 }} />
-            <span style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: statusColor }}>
-              {result.status === "ok" ? "PRESCRIPTION MAY BE ISSUED" : result.status === "block" ? "MINIMUM INTERVAL NOT MET" : "DATE NOT PROVIDED"}
-            </span>
+        <div style={{ width:"100%", maxWidth:640, background:"#181c27", border:`1px solid ${statusColor}`, borderRadius:12, padding:24, marginBottom:14, boxSizing:"border-box" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+            <div style={{ width:10, height:10, borderRadius:"50%", background:statusColor, boxShadow:`0 0 8px ${statusColor}`, flexShrink:0 }} />
+            <span style={{ fontSize:11, letterSpacing:"0.12em", textTransform:"uppercase", color:statusColor }}>{result.status==="ok" ? "PRESCRIPTION MAY BE ISSUED" : result.status==="block" ? "MINIMUM INTERVAL NOT MET" : "DATE NOT PROVIDED"}</span>
           </div>
-
-          {/* Metrics */}
-          <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+          <div style={{ display:"flex", gap:10, marginBottom:20 }}>
             <MetricBox label="Total THC Supplied (mg)" value={result.totalTHC.toLocaleString("en-AU")} color={statusColor} />
             <MetricBox label="Min. Days Required" value={result.minDays} color={statusColor} />
             <MetricBox label="Days Elapsed" value={result.daysElapsed !== null ? result.daysElapsed : "—"} color={result.daysElapsed !== null ? statusColor : "#94a3b8"} />
           </div>
-
-          {/* Calculation steps */}
-          <div style={{ background: "#0f1117", border: "1px solid #2a3045", borderRadius: 8, padding: 16, marginBottom: 16 }}>
-            {result.steps.map(([k, v], i) => <StepRow key={i} k={k} v={v} />)}
+          <div style={{ background:"#0f1117", border:"1px solid #2a3045", borderRadius:8, padding:16, marginBottom:16 }}>
+            {result.steps.map((s,i) => <StepRow key={i} k={s.k} v={s.v} highlight={s.highlight} sectionHeader={s.section} />)}
           </div>
-
-          {/* Verdict */}
-          <div style={{
-            padding: "14px 16px", borderRadius: 8, fontSize: 12, lineHeight: 1.7,
-            background: result.status === "ok" ? "rgba(74,222,128,0.1)" : result.status === "block" ? "rgba(248,113,113,0.1)" : "rgba(245,158,11,0.1)",
-            color: result.status === "ok" ? "#86efac" : result.status === "block" ? "#fca5a5" : "#fcd34d"
-          }}>
-            {result.status === "ok" && <>
-              {result.daysElapsed} days have elapsed, meeting the minimum interval of {result.minDays} days. A further {result.routeLabel.toLowerCase()} THC prescription may be issued as of:
-              <div style={{ fontSize: 18, fontWeight: 600, marginTop: 6 }}>{result.eligibleDateStr}</div>
-            </>}
-            {result.status === "block" && <>
-              Only {result.daysElapsed} of {result.minDays} required days have elapsed ({result.minDays - result.daysElapsed} days remaining). A routine prescription must not be issued. The earliest eligible date is:
-              <div style={{ fontSize: 18, fontWeight: 600, marginTop: 6 }}>{result.eligibleDateStr}</div>
-            </>}
-            {result.status === "nodate" && <>
-              A minimum of {result.minDays} days must elapse from the start of the previous supply period before a further {result.routeLabel.toLowerCase()} THC prescription may be issued. Enter the supply start date to check eligibility.
-            </>}
+          <div style={{ padding:"14px 16px", borderRadius:8, fontSize:12, lineHeight:1.7, background: result.status==="ok" ? "rgba(74,222,128,0.1)" : result.status==="block" ? "rgba(248,113,113,0.1)" : "rgba(245,158,11,0.1)", color: result.status==="ok" ? "#86efac" : result.status==="block" ? "#fca5a5" : "#fcd34d" }}>
+            {result.status==="ok" && <>{result.daysElapsed} days have elapsed, meeting the minimum interval of {result.minDays} days. A further {result.routeLabel.toLowerCase()} THC prescription may be issued as of:<div style={{ fontSize:18, fontWeight:600, marginTop:6 }}>{result.eligibleDateStr}</div></> }
+            {result.status==="block" && <>Only {result.daysElapsed} of {result.minDays} required days have elapsed ({result.minDays - result.daysElapsed} days remaining). A routine prescription must not be issued. The earliest eligible date is:<div style={{ fontSize:18, fontWeight:600, marginTop:6 }}>{result.eligibleDateStr}</div></> }
+            {result.status==="nodate" && <>A minimum of {result.minDays} days must elapse from the start of the previous supply period before a further {result.routeLabel.toLowerCase()} THC prescription may be issued. Enter the supply start date to check eligibility.</> }
           </div>
-
-          {/* Clinical actions */}
-          {result.status === "block" && (
-            <div style={{ marginTop: 14, fontSize: 11, color: "#64748b", lineHeight: 2 }}>
-              <div style={{ color: "#f87171", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 8 }}>Required Clinical Review</div>
-              {[
-                "Determine whether the patient has exceeded the prescribed dose",
-                "Assess for misuse, loss, diversion, or unsafe use",
-                "Review whether the treatment plan remains appropriate",
-                "Consider adjusting dispensing intervals",
-                "Consider reducing, pausing, or ceasing treatment"
-              ].map((a, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, paddingLeft: 4 }}>
-                  <span style={{ color: "#f87171" }}>—</span>
-                  <span>{a}</span>
-                </div>
-              ))}
+          {result.status==="block" && (
+            <div style={{ marginTop:14, fontSize:11, color:"#64748b", lineHeight:2 }}>
+              <div style={{ color:"#f87171", fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:8 }}>Required Clinical Review</div>
+              {clinicalItems.map((a,i) => <div key={i} style={{ display:"flex", gap:10, paddingLeft:4 }}><span style={{ color:"#f87171" }}>—</span><span>{a}</span></div>)}
             </div>
           )}
         </div>
       )}
-
-      <div style={{ width: "100%", maxWidth: 640, fontSize: 10, color: "#475569", lineHeight: 1.7, borderTop: "1px solid #2a3045", paddingTop: 16, textAlign: "center" }}>
+      <div style={{ width:"100%", maxWidth:640, fontSize:10, color:"#475569", lineHeight:1.7, borderTop:"1px solid #2a3045", paddingTop:16, textAlign:"center" }}>
         This tool assists clinical decision-making only. It does not replace prescriber judgement. Where the minimum interval has not elapsed, a new prescription may only be issued with a clearly documented and authorised clinical reason. Always refer to current Schedule 8 prescribing regulations.
       </div>
     </div>
   );
 }
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
